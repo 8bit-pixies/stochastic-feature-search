@@ -52,9 +52,44 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
     # slot.
     return birth, death, change
 class BMARS(object):
-    def __init__(self, X):
+    def __init__(self, X, interactin=2):
         # add other params later...
         self.X = X # X is your base matrix, i.e. when Basis = 1
+        self.interaction = interaction
+        self.basis = []
+        self.params = {} # dict of list with parameters related to basis
+    
+    def build_pipeline(self):
+        # returns pipeline object...
+        pass
+        
+    def all_moves(self):
+        # determines all possible moves
+        # in strict MARS, you can only select basis once, and can't be nested
+        """
+        selected basis will be a dictionary in the form:
+        
+        *  basis index: list of lists...[[1], [0], [0, 1]] etc...
+        *  sign: list (-1, +1)
+        *  knots: list (float)
+        
+        return list of basis which have not yet been chosen...
+        """
+        # get all possible moves...
+        # if X is pandas...
+        s = X.columns
+        # s = list(range(X.shape[1]))
+        max_size = self.interaction+1
+        all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
+        
+        # now based on this go ahead and...do stuff!
+        valid_basis = [x for x in all_combin if x not in self.basis]
+        return valid_basis
+        
+        
+        
+        
+        
         
 
 
