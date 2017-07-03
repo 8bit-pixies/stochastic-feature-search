@@ -5,6 +5,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline, FeatureUnion
 
 # for sampling
 import random # use random.choice? and random.sample for interactions
@@ -51,18 +52,61 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
     # output the probabilities...which are used for the generated unichr
     # slot.
     return birth, death, change
+
+
+class BaseModel(BaseEstimator, TransformerMixin):
+    """
+    Parameters
+    ----------
+    
+    mask : the column indices you wish to keep    
+    """
+    
+    def __init__(self):
+        pass
+    
+    def fit(self, x, y=None):
+        return self
+
+    def transform(self, x):
+        # converts pandas to numpy array
+        return np.array(x)
+
+class Hinge(BaseEstimator, TransformerMixin):
+    """
+    Parameters
+    ----------
+    
+    x: indices of interest
+    t: hinges 
+    s: sign
+    
+    always return 1d vector
+    """
+    def __init__(self, x, t, s):
+        self.indices = list(x)
+        self.knots = t
+        self.signs = s
+    
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X):
+        X_subset = np.array(X[[self.indices]])        
+        for idx, knot in enumerate(self.knots):
+            X_subset[:, idx] = np.maximum(X_subset[:, idx]-knot, 0) * self.signs[idx]
+        
+        # if multiple collapse by interaction        
+        return np.prod(X_subset, axis=1)
+
 class BMARS(object):
     def __init__(self, X, interactin=2):
         # add other params later...
         self.X = X # X is your base matrix, i.e. when Basis = 1
         self.interaction = interaction
-        self.basis = []
-        self.params = {} # dict of list with parameters related to basis
+        self.basis = [] # this is a list of list, as order matters
+        self.params = [] # list of dicts with params by index
     
-    def build_pipeline(self):
-        # returns pipeline object...
-        pass
-        
     def all_moves(self):
         # determines all possible moves
         # in strict MARS, you can only select basis once, and can't be nested
@@ -83,17 +127,77 @@ class BMARS(object):
         all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
         
         # now based on this go ahead and...do stuff!
-        valid_basis = [x for x in all_combin if x not in self.basis]
+        basis_set = self._get_basis_set()
+        valid_basis = [x for x in all_combin if x not in basis_set]
         return valid_basis
+    
+    def construct_pipeline(self, colnames=True):
+        model_matrix = [('base model', BaseModel())]
+        col_names = []
+        for basis, params in zip(self.basis, self.params):
+            model_name = "B_{}".format("".join(str(x) for x in list(basis)))
+            model_obj  = Hinge(basis, params['knots'], params['signs'])
+            col_names.append(model_name)
+            model_matrix.append((model_name, model_obj))
+        if colnames:
+            return FeatureUnion(model_matrix), col_names[:]
+        else:
+            return FeatureUnion(model_matrix)
+    
+    def _get_basis_set(self):
+        return [set(x) for x in self.basis]
+    
+    def _add_basis(self, basis, knot, sign):
+        """
+        Do not use this method directly.
+        """
+        self.basis.append(basis[:])        
+        param = {}
+        param['knots'] = knot
+        param['signs'] = sign
+        self.basis.append(param.copy())
+    
+    def _remove_basis(self, basis):
+        idx_pop = [idx for idx, set_b in basis_set if set(basis) == set_b][0]
+        self.basis.pop(idx_pop)
+        self.params.pop(idx_pop)
+    
+    def change_basis(self, basis, knot, sign):
+        basis_set = self._get_basis_set()
+        if not set(basis) in basis_set:
+            raise Exception("Cannot find basis {} in current model".format(' '.join(basis)))
         
+        # continue
+        self._remove_basis(basis)        
+        self._add_basis(basis, knot, sign)
         
+        return None
+    
+    def add_basis(self, basis, knot, sign):
+        """
+        basis is a list as order matters, 
+        knot is is a list
+        sign is a list of -1, 1
         
+        if a basis set already exists, we will replace it...
+        """
+        # check if it exists...
+        basis_set = self._get_basis_set()
+        if set(basis) in basis_set:
+            self.change_basis(basis, knot, sign)
+        else:
+            self._add_basis(basis, knot, sign)
+    
+    def remove_basis(self, basis, knot=None, sign=None):
+        """
+        remove basis object
+        """
+        basis_set = self._get_basis_set()
+        if not set(basis) in basis_set:
+            raise Exception("Cannot find basis {} in current model".format(' '.join(basis)))
         
-        
-        
-
-
-
+        self._remove_basis(basis)  
+            
 # last step is to calculate the acceptance criteria..
 def acceptance():
     # this probably should be a class? maybe
