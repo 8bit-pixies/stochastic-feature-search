@@ -36,6 +36,10 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
     pk = 1-bk-dk
     
     If we have 1 or 0 basis function always return birth prob to be 1. 
+    
+    This is for calculating:
+    
+    `b_k`, `d_k`, `p_k` respectively
     """
     if k <= 1:
         return 1, 0, 0
@@ -100,12 +104,20 @@ class Hinge(BaseEstimator, TransformerMixin):
         return np.prod(X_subset, axis=1)
 
 class BMARS(object):
-    def __init__(self, X, interactin=2):
+    def __init__(self, X, interaction=2, basis=[], params=[]):
         # add other params later...
         self.X = X # X is your base matrix, i.e. when Basis = 1
         self.interaction = interaction
-        self.basis = [] # this is a list of list, as order matters
-        self.params = [] # list of dicts with params by index
+        self.basis = basis # this is a list of list, as order matters
+        self.params = params # list of dicts with params by index
+    
+    def export(self):
+        bmars = {}
+        bmars['X'] = self.X.copy()
+        bmars['interaction'] = self.interaction
+        bmars['basis'] = self.basis[:]
+        bmars['params'] = self.params[:]
+        return bmars
     
     def all_moves(self):
         # determines all possible moves
@@ -121,7 +133,7 @@ class BMARS(object):
         """
         # get all possible moves...
         # if X is pandas...
-        s = X.columns
+        s = self.X.columns
         # s = list(range(X.shape[1]))
         max_size = self.interaction+1
         all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
@@ -155,7 +167,7 @@ class BMARS(object):
         param = {}
         param['knots'] = knot
         param['signs'] = sign
-        self.basis.append(param.copy())
+        self.params.append(param.copy())
     
     def _remove_basis(self, basis):
         idx_pop = [idx for idx, set_b in basis_set if set(basis) == set_b][0]
@@ -170,8 +182,6 @@ class BMARS(object):
         # continue
         self._remove_basis(basis)        
         self._add_basis(basis, knot, sign)
-        
-        return None
     
     def add_basis(self, basis, knot, sign):
         """
@@ -195,22 +205,28 @@ class BMARS(object):
         basis_set = self._get_basis_set()
         if not set(basis) in basis_set:
             raise Exception("Cannot find basis {} in current model".format(' '.join(basis)))
-        
         self._remove_basis(basis)  
             
 # last step is to calculate the acceptance criteria..
-def acceptance():
+def acceptance(BMARS_obj):
     # this probably should be a class? maybe
     # this is...
     # min(1, bayes_factor x prior_ratio x proposal_ratio x jacobian {1})
     pass
 
 # bayes factor
-def accept_bayes_factor(X, proposal_model, current_model):
+def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
     """
     Do something and just us MC to approximate for now...
     ask Richard what im doing with this part...
+    
+    param is empty if it is death - otherwise can provide benefit?    
+    basis is the one to: add, remove, change    
+    mode is one of "birth", "death", "change"
     """
+    curr_obj = BMARS(**BMARS_obj.export())
+    
+    
     pass
     
     
