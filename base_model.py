@@ -222,6 +222,47 @@ def acceptance(BMARS_obj):
     # min(1, bayes_factor x prior_ratio x proposal_ratio x jacobian {1})
     pass
 
+
+def bmars_sample_basis(X, basis, params, mode='dict'):
+    """
+    -  X is training data
+    -  basis is the columns to be selected for the basis
+    -  params is the parameters associated with this basis
+    -  mode is one of dict or list, if it is list will return: 
+        basis, knots, sign
+    
+    This function provides another set of parameters for
+    *  sign(s)
+    *  basis
+    
+    of chosen one.
+    knots and signs are assumed to be uniform.
+    
+    This function can be used for adding or changing a selected basis
+    as switches are assumed to be uniform and independent. 
+    """
+    X_subset = np.array(X[basis])
+    
+    # redrawing signs is easy...it is random choice of -1, 1
+    import random
+    signs = params['signs'][:]
+    signs = [random.choice([-1, 1]) for _ in signs]    
+    
+    knots = np.apply_along_axis(np.random.choice, 0, X_subset)    
+    
+    # create new param set
+    new_param = {}
+    new_param['signs'] = signs
+    new_param['knots'] = knots
+    new_param['basis'] = basis
+    
+    if mode == 'dict':
+        return new_param
+    elif mode == 'list':
+        return new_param['basis'], new_param['knots'], new_param['signs']
+    else:
+        raise Exception("Invalid choice of output, mode should be one of 'dict' or 'list'.")
+
 # bayes factor
 def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
     """
@@ -232,8 +273,11 @@ def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
     basis is the one to: add, remove, change    
     mode is one of "birth", "death", "change"
     """
-    curr_obj = BMARS(**BMARS_obj.export())
-    current_basis_param = curr_obj._get_params(basis)
+    current_model_param = BMARS_obj.export()
+    curr_obj = BMARS(**current_model_param)
+    
+    # as pointed out a model is per basis choice - not the params in model
+    # so if we change params...
     
     
     
