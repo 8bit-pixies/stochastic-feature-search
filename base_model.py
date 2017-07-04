@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from itertools import chain
+
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import KFold
@@ -348,6 +350,38 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     return bayes_factor
 
+def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+    """
+    l is lambda which is needed for p(k)
+    
+    """
+    if mode == 'change':
+        return 1.0
+    
+    #p(k) * (k!/N^k) * 
+    # use soemthing liek this: all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
+    # all knot positions and sign can be simulated....
+    
+    """p_k
+    
+    poisson_obj = poisson(l)
+    p_k = poisson_obj.pmf(k)
+    """
+    
+    """prior-basis-function
+    max_size = interaction+1
+    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
+    
+    return np.math.factorial(k)/(N**k)    
+    """
+    
+    """prior for all knot and signs...
+    interaction = interaction
+    n = X.shape[0]
+    (1.0/(2*n))**(sum(range(interaction+1))-1)
+    """
+    pass
+    
     
     
     
