@@ -10,6 +10,12 @@ from sklearn.pipeline import Pipeline, FeatureUnion
 # for sampling
 import random # use random.choice? and random.sample for interactions
 
+def create_model(additional_feats=[]):
+    pipeline = additional_feats[:]
+    pipeline.append(('SGD_regressor', SGDRegressor(loss='squared_loss', penalty='elasticnet')))
+    model = Pipeline(pipeline[:])
+    return model
+
 def eval_pipeline(additional_feats=[], X=X_df, y=y, verbose=True):
     #print(additional_feats)
     
@@ -217,9 +223,38 @@ class BMARS(object):
             
 # last step is to calculate the acceptance criteria..
 def acceptance(BMARS_obj):
+    """
+    param is empty if it is death - otherwise can provide benefit?    
+    basis is the one to: add, remove, change    
+    mode is one of "birth", "death", "change"
+    
+    """
     # this probably should be a class? maybe
     # this is...
     # min(1, bayes_factor x prior_ratio x proposal_ratio x jacobian {1})
+    current_model_param = BMARS_obj.export()
+    curr_model = BMARS(**current_model_param)
+    
+    # as pointed out a model is per basis choice - not the params in model
+    # so if we change params...
+    
+    if mode not in ['change', 'birth', 'add', 'remove', 'death']:
+        raise Exception("{} is not a valid mode option, please choose one of 'birth', 'death', 'change'.".format(mode))
+    
+    if mode == 'change':
+        # grab that basis...
+        proposed_model = BMARS(**current_model_param)
+        basis, knot, sign = bmars_sample_basis(X, basis, mode='list')
+        proposed_model.add_basis(basis, knot, sign)
+    elif mode in ['birth', 'add']:
+        pass
+    elif mode in ['death', 'remove']:
+        pass
+    # do other stuff...
+    # bayes_factor = ???
+    # prior_ratio = ???
+    # proposal_ratio = ???
+    
     pass
 
 
@@ -263,8 +298,24 @@ def bmars_sample_basis(X, basis, params, mode='dict'):
     else:
         raise Exception("Invalid choice of output, mode should be one of 'dict' or 'list'.")
 
+def gaussian_likelihood(y, y_hat):
+    """
+    assume gaussian iid noise
+    """
+    y = y.astype(float)
+    y_hat = y_hat.astype(float)
+    if np.array_equal(y, y_hat):
+        return float("-inf")
+    l2 = (y-y_hat)**2    
+    sigma2 = np.mean(l2)
+    n = len(y)
+    
+    constant = 1.0/(2*np.pi*sigma2)
+    
+    return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
+    
 # bayes factor
-def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
+def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS):
     """
     Do something and just us MC to approximate for now...
     ask Richard what im doing with this part...
@@ -272,19 +323,25 @@ def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
     param is empty if it is death - otherwise can provide benefit?    
     basis is the one to: add, remove, change    
     mode is one of "birth", "death", "change"
-    """
-    current_model_param = BMARS_obj.export()
-    curr_obj = BMARS(**current_model_param)
+    """   
     
-    # as pointed out a model is per basis choice - not the params in model
-    # so if we change params...
+    # we will calculate the likelihood based on the pipeline...
+    # for gaussian it is straight forward...
     
+    # create model...
     
+    current_model = create_model(current_BMARS.construct_pipeline(False))
+    current_model.fit(X)
     
-    # if mode is change - get the current params for that basis.
+    proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
+    proposed_model.fit(X)
     
+    y_hat_current = current_model.predict(X)
+    y_hat_proposed = proposed_model.predict(X)
     
-    pass
+    bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
+    return bayes_factor
+
     
     
     
