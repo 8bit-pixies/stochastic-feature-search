@@ -170,9 +170,17 @@ class BMARS(object):
         self.params.append(param.copy())
     
     def _remove_basis(self, basis):
+        basis_set = self._get_basis_set()
         idx_pop = [idx for idx, set_b in basis_set if set(basis) == set_b][0]
         self.basis.pop(idx_pop)
         self.params.pop(idx_pop)
+    
+    def _get_params(self, basis):
+        # based on a basis set, get the associated parameters...
+        # assumes the basis exists
+        basis_set = self._get_basis_set()
+        idx = [idx for idx, set_b in basis_set if set(basis) == set_b][0]
+        return self.params[idx]
     
     def change_basis(self, basis, knot, sign):
         basis_set = self._get_basis_set()
@@ -225,6 +233,11 @@ def accept_bayes_factor(X, BMARS_obj, basis, param={}, mode="change"):
     mode is one of "birth", "death", "change"
     """
     curr_obj = BMARS(**BMARS_obj.export())
+    current_basis_param = curr_obj._get_params(basis)
+    
+    
+    
+    # if mode is change - get the current params for that basis.
     
     
     pass
