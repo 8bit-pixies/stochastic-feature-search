@@ -315,7 +315,7 @@ def gaussian_likelihood(y, y_hat):
     return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
     
 # bayes factor
-def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS):
+def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     """
     Do something and just us MC to approximate for now...
     ask Richard what im doing with this part...
@@ -324,6 +324,10 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS):
     basis is the one to: add, remove, change    
     mode is one of "birth", "death", "change"
     """   
+    if mode == 'change':
+        # this will always be the same as the underlying model
+        # is the same.
+        return 1.0
     
     # we will calculate the likelihood based on the pipeline...
     # for gaussian it is straight forward...
@@ -339,6 +343,8 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS):
     y_hat_current = current_model.predict(X)
     y_hat_proposed = proposed_model.predict(X)
     
+    # likelihood ratio...
+    # you need to "integrate" out all possible hyper parameters to get the bayes factor here...    
     bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     return bayes_factor
 
