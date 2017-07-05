@@ -224,7 +224,8 @@ class BMARS(object):
         self._remove_basis(basis)  
             
 # last step is to calculate the acceptance criteria..
-def acceptance(BMARS_obj):
+'''
+def acceptance(BMARS_obj, basis = None, mode='change'):
     """
     param is empty if it is death - otherwise can provide benefit?    
     basis is the one to: add, remove, change    
@@ -249,7 +250,11 @@ def acceptance(BMARS_obj):
         basis, knot, sign = bmars_sample_basis(X, basis, mode='list')
         proposed_model.add_basis(basis, knot, sign)
     elif mode in ['birth', 'add']:
-        pass
+        proposed_model = BMARS(**current_model_param)
+        all_possible_moves = proposed_model.all_moves()
+        curr_moves = proposed_model.export()['basis']
+        
+        #all_moves
     elif mode in ['death', 'remove']:
         pass
     # do other stuff...
@@ -258,6 +263,7 @@ def acceptance(BMARS_obj):
     # proposal_ratio = ???
     
     pass
+'''
 
 
 def bmars_sample_basis(X, basis, params, mode='dict'):
@@ -315,7 +321,18 @@ def gaussian_likelihood(y, y_hat):
     constant = 1.0/(2*np.pi*sigma2)
     
     return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
-    
+
+def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+    """
+    X is our data
+    y is out labels
+    l is lambda, the hyperparameter for poisson distribution, where p(k) ~ Poisson(l)
+    interaction is max level of interaction
+    ... the rest follows.     
+    """
+    alpha = min(1.0, accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode) * accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode) * (X, y, l, interaction, current_BMARS, proposed_BMARS, mode))
+    return alpha
+
 # bayes factor
 def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     """
@@ -347,6 +364,8 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     
     # likelihood ratio...
     # you need to "integrate" out all possible hyper parameters to get the bayes factor here...    
+    # if mode is change - we will probably want to use a point estimate. of the two models
+    # but we will leave this alone for now.
     bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     return bayes_factor
 
@@ -388,30 +407,72 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     
     current_param  = current_BMARS.export()
     proposed_param = proposed_BMARS.export()
-    
+    current_basis = current_param['basis']
+    propose_basis = proposed_param['basis']
     if mode == 'birth':
         # get the basis for the proposed birth..
-        current_basis = current_param['basis']
-        propose_basis = proposed_param['basis']
         new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
-        
         prior_num_basis_ratio = poisson_obj.pmf(k+1)/poisson_obj.pmf(k)
         prior_type_basis_ratio = k/N
         prior_params_ratio = (1.0/(2*n))**(len(new_basis))
         
     elif mode == 'death':
-        current_basis = current_param['basis']
-        propose_basis = proposed_param['basis']
         rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
-        
         prior_num_basis_ratio = poisson_obj.pmf(k-1)/poisson_obj.pmf(k)
         prior_type_basis_ratio = N/(k-1)
         prior_params_ratio = (1.0/(2*n))**(-len(rm_basis))
     else:
-        raise Exception("mode: {} not one of 'birth', 'death', 'change'.")
+        raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_prior_ratio.")
     
     return prior_num_basis_ratio * prior_type_basis_ratio * prior_params_ratio
+
+def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+    """
+    l is lambda which is needed for p(k)
     
+    """
+    if mode == 'change':
+        return 1.0
+    
+    #output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
+    """
+    k is the number of basis/transformations in the current state
+    l is the lambda parameter for poisson
+    c is constant taken to be 0.4
+    
+    bk = c min (1, p(k+1)/p(k))
+    dk = c min (1, p(k)/p(k+1))
+    pk = 1-bk-dk
+    
+    If we have 1 or 0 basis function always return birth prob to be 1. 
+    
+    This is for calculating:
+    
+    `b_k`, `d_k`, `p_k` respectively
+    """
+    current_param  = current_BMARS.export()
+    proposed_param = proposed_BMARS.export()
+    current_basis = current_param['basis']
+    propose_basis = proposed_param['basis']
+    
+    k = len(current_param['basis'])
+    b_k, d_k, p_k = output_prob_state(k, l)
+    
+    max_size = interaction+1
+    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))    
+    n = X.shape[0]
+    
+    if mode == 'birth':
+        # propose death / propose birth
+        new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
+        J_k1 = len(new_basis)
+        b_k1, d_k1, p_k1 = output_prob_state(k+1, l)
+        return (d_k1/k)/(b_k/(N*((2*n)**J_k1)))
+    if mode == 'death':
+        rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
+        
+    raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_proposal_ratio.")
+        
     
     
     
