@@ -380,7 +380,37 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     n = X.shape[0]
     (1.0/(2*n))**(sum(range(interaction+1))-1)
     """
-    pass
+    poisson_obj = poisson(l)
+    #p_k = poisson_obj.pmf(k)  
+    max_size = interaction+1
+    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))    
+    n = X.shape[0]
+    
+    current_param  = current_BMARS.export()
+    proposed_param = proposed_BMARS.export()
+    
+    if mode == 'birth':
+        # get the basis for the proposed birth..
+        current_basis = current_param['basis']
+        propose_basis = proposed_param['basis']
+        new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
+        
+        prior_num_basis_ratio = poisson_obj.pmf(k+1)/poisson_obj.pmf(k)
+        prior_type_basis_ratio = k/N
+        prior_params_ratio = (1.0/(2*n))**(len(new_basis))
+        
+    elif mode == 'death':
+        current_basis = current_param['basis']
+        propose_basis = proposed_param['basis']
+        rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
+        
+        prior_num_basis_ratio = poisson_obj.pmf(k-1)/poisson_obj.pmf(k)
+        prior_type_basis_ratio = N/(k-1)
+        prior_params_ratio = (1.0/(2*n))**(-len(rm_basis))
+    else:
+        raise Exception("mode: {} not one of 'birth', 'death', 'change'.")
+    
+    return prior_num_basis_ratio * prior_type_basis_ratio * prior_params_ratio
     
     
     
