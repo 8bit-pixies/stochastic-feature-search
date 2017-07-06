@@ -12,6 +12,8 @@ from sklearn.pipeline import Pipeline, FeatureUnion
 # for sampling
 import random # use random.choice? and random.sample for interactions
 
+import itertools
+
 def create_model(additional_feats=[]):
     pipeline = additional_feats[:]
     pipeline.append(('SGD_regressor', SGDRegressor(loss='squared_loss', penalty='elasticnet')))
@@ -323,11 +325,65 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
         y_hat_current = current_model.predict(X)
         y_hat_proposed = proposed_model.predict(X)
         bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
+    elif mode == 'birth':
+        current_basis = current_BMARS.export()['basis']
+        current_model.fit(X)
+        
+        # find the new basis...
+        new_basis = [x for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
+        
+        # we know the likelihood for the current one? so only need to iterate over the new basis...
+        y_hat_current = current_model.predict(X)
+        current_likelihood = gaussian_likelihood(y, y_hat_current)   
+        
+        # need to perform some MC for proposed likelihood.
+        # generate all combinations...
+        # faster way might be to get histogram of values.
+        pos_knots = []
+        
+        for b_col in new_basis:
+            # if there are duplicates it is "fine"
+            # as it will be reflective of the duplication of 
+            # knot points
+            knots = np.array(X[:, b_col]).tolist()
+            knot_p = [knots, [-1, 1]]
+            pos_knot_combo = list(itertools.product(*knot_p))
+            pos_knots.append(pos_knot_combo)
+        
+        # it will be knot points, with the last param being sign.   
+        # this will be list of tuples of tuple..
+        
+        # [((knot, sign), ... # basis)]
+        pos_comb_knots = list(itertools.product(*pos_knots))
+        
+        # sample how many? - say 30
+        n_sample = min(30, len(pos_comb_knots))
+        import random
+        eval_points = random.sample(pos_comb_knots, n_sample) 
+        
+        proposed_params_base = current_BMARS.export()
+        def add_param(new_basis, comb_knots):   
+            # def add_basis(self, basis, knot, sign):
+            knots = [x[0] for x in list(comb_knots)]
+            signs = [x[1] for x in list(comb_knots)]
+            return {'basis': new_basis, 'knot': knots, 'sign': signs}
+        
+        propose_likelihoods = []
+        for basis_knot in eval_points:
+            proposed_model = BMARS(**model)
+            params = add_param(new_basis, basis_knot)
+            proposed_model.add_basis(**params)
+            y_hat_propose = proposed_model.predict(X)
+            propose_likelihoods.append(gaussian_likelihood(y, y_hat_propose))
+        propose_likelihood = np.mean(propose_likelihoods)
+        bayes_factor = current_likelihood/propose_likelihood
+    elif mode == 'death':
+        pass
     else:
         # do exhaustive search - or use percnetiles for histogram information for faster 
         # eval in MC sense.
-        pass
-        bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
+        raise Exception("Invalid mode: {} chosen. Please choose mode in 'birth', 'death', 'change' in accept_bayes_factor".format(mode))
+        
     return bayes_factor
 
 def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
