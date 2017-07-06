@@ -327,6 +327,7 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
         bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     elif mode == 'birth':
         current_basis = current_BMARS.export()['basis']
+        propose_basis = proposed_BMARS.export()['basis']
         current_model.fit(X)
         
         # find the new basis...
@@ -378,7 +379,7 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
         propose_likelihood = np.mean(propose_likelihoods)
         bayes_factor = current_likelihood/propose_likelihood
     elif mode == 'death':
-        pass
+        return accept_bayes_factor(X, y, proposed_BMARS, current_BMARS, mode='birth')
     else:
         # do exhaustive search - or use percnetiles for histogram information for faster 
         # eval in MC sense.
