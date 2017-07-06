@@ -222,7 +222,7 @@ class BMARS(object):
         if not set(basis) in basis_set:
             raise Exception("Cannot find basis {} in current model".format(' '.join(basis)))
         self._remove_basis(basis)  
-            
+    
 # last step is to calculate the acceptance criteria..
 def bmars_sample_basis(X, basis, params, mode='dict'):
     """
@@ -309,24 +309,24 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     # for gaussian it is straight forward...
     # create model...
     
-    current_model = create_model(current_BMARS.construct_pipeline(False))
-    current_model.fit(X)
-    
-    proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
-    proposed_model.fit(X)
-    
-    y_hat_current = current_model.predict(X)
-    y_hat_proposed = proposed_model.predict(X)
-    
     # likelihood ratio...
     # you need to "integrate" out all possible hyper parameters to get the bayes factor here...    
     # if mode is change - we will probably want to use a point estimate. of the two models
     # but we will leave this alone for now.
     if mode == 'change':
+        current_model = create_model(current_BMARS.construct_pipeline(False))
+        current_model.fit(X)
+        
+        proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
+        proposed_model.fit(X)
+        
+        y_hat_current = current_model.predict(X)
+        y_hat_proposed = proposed_model.predict(X)
         bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     else:
         # do exhaustive search - or use percnetiles for histogram information for faster 
         # eval in MC sense.
+        pass
         bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     return bayes_factor
 
