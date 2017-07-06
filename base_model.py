@@ -224,48 +224,6 @@ class BMARS(object):
         self._remove_basis(basis)  
             
 # last step is to calculate the acceptance criteria..
-'''
-def acceptance(BMARS_obj, basis = None, mode='change'):
-    """
-    param is empty if it is death - otherwise can provide benefit?    
-    basis is the one to: add, remove, change    
-    mode is one of "birth", "death", "change"
-    
-    """
-    # this probably should be a class? maybe
-    # this is...
-    # min(1, bayes_factor x prior_ratio x proposal_ratio x jacobian {1})
-    current_model_param = BMARS_obj.export()
-    curr_model = BMARS(**current_model_param)
-    
-    # as pointed out a model is per basis choice - not the params in model
-    # so if we change params...
-    
-    if mode not in ['change', 'birth', 'add', 'remove', 'death']:
-        raise Exception("{} is not a valid mode option, please choose one of 'birth', 'death', 'change'.".format(mode))
-    
-    if mode == 'change':
-        # grab that basis...
-        proposed_model = BMARS(**current_model_param)
-        basis, knot, sign = bmars_sample_basis(X, basis, mode='list')
-        proposed_model.add_basis(basis, knot, sign)
-    elif mode in ['birth', 'add']:
-        proposed_model = BMARS(**current_model_param)
-        all_possible_moves = proposed_model.all_moves()
-        curr_moves = proposed_model.export()['basis']
-        
-        #all_moves
-    elif mode in ['death', 'remove']:
-        pass
-    # do other stuff...
-    # bayes_factor = ???
-    # prior_ratio = ???
-    # proposal_ratio = ???
-    
-    pass
-'''
-
-
 def bmars_sample_basis(X, basis, params, mode='dict'):
     """
     -  X is training data
@@ -306,22 +264,6 @@ def bmars_sample_basis(X, basis, params, mode='dict'):
     else:
         raise Exception("Invalid choice of output, mode should be one of 'dict' or 'list'.")
 
-def gaussian_likelihood(y, y_hat):
-    """
-    assume gaussian iid noise
-    """
-    y = y.astype(float)
-    y_hat = y_hat.astype(float)
-    if np.array_equal(y, y_hat):
-        return float("-inf")
-    l2 = (y-y_hat)**2    
-    sigma2 = np.mean(l2)
-    n = len(y)
-    
-    constant = 1.0/(2*np.pi*sigma2)
-    
-    return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
-
 def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
     """
     X is our data
@@ -343,14 +285,28 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     basis is the one to: add, remove, change    
     mode is one of "birth", "death", "change"
     """   
+    """
+    # if it is change we will use a point likelihood
     if mode == 'change':
-        # this will always be the same as the underlying model
-        # is the same.
         return 1.0
-    
+    """
+    def gaussian_likelihood(y, y_hat):
+        """
+        assume gaussian iid noise
+        """
+        y = y.astype(float)
+        y_hat = y_hat.astype(float)
+        if np.array_equal(y, y_hat):
+            return float("-inf")
+        l2 = (y-y_hat)**2    
+        sigma2 = np.mean(l2)
+        n = len(y)
+        
+        constant = 1.0/(2*np.pi*sigma2)
+        
+        return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
     # we will calculate the likelihood based on the pipeline...
     # for gaussian it is straight forward...
-    
     # create model...
     
     current_model = create_model(current_BMARS.construct_pipeline(False))
@@ -366,7 +322,12 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     # you need to "integrate" out all possible hyper parameters to get the bayes factor here...    
     # if mode is change - we will probably want to use a point estimate. of the two models
     # but we will leave this alone for now.
-    bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
+    if mode == 'change':
+        bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
+    else:
+        # do exhaustive search - or use percnetiles for histogram information for faster 
+        # eval in MC sense.
+        bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     return bayes_factor
 
 def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
