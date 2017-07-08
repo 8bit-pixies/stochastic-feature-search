@@ -8,11 +8,14 @@ from sklearn.linear_model import SGDRegressor
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.base import TransformerMixin, BaseEstimator
+from sklearn.metrics import make_scorer
 
 # for sampling
 import random # use random.choice? and random.sample for interactions
 
 import itertools
+from itertools import combinations
 
 def create_model(additional_feats=[]):
     pipeline = additional_feats[:]
@@ -20,9 +23,8 @@ def create_model(additional_feats=[]):
     model = Pipeline(pipeline[:])
     return model
 
-def eval_pipeline(additional_feats=[], X=X_df, y=y, verbose=True):
-    #print(additional_feats)
-    
+def eval_pipeline(additional_feats, X, y, verbose=True):
+    #print(additional_feats)    
     pipeline = additional_feats[:]
     pipeline.append(('SGD_regressor', SGDRegressor(loss='squared_loss', penalty='elasticnet')))
     model = Pipeline(pipeline[:])
@@ -35,7 +37,7 @@ def eval_pipeline(additional_feats=[], X=X_df, y=y, verbose=True):
     return results.mean()
 
 # 
-def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
+def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11, show_lambda=False):
     """
     k is the number of basis/transformations in the current state
     l is the lambda parameter for poisson
@@ -51,12 +53,16 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
     
     `b_k`, `d_k`, `p_k` respectively
     """
-    if k <= 1:
-        return 1, 0, 0
     from scipy.stats import poisson, gamma
     if l is None:
         # generate a sample l from Gamma
         l = gamma.rvs(gamma_loc+k, gamma_scale,size=1)[0]
+    if show_lambda:
+        print("Lambda selected to be: {}".format(l))
+    
+    if k <= 1:
+        return 1, 0, 0
+
     
     poisson_obj = poisson(l)
     birth = c*min(1, (poisson_obj.pmf(k+1)/poisson_obj.pmf(k)))
@@ -65,8 +71,18 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11):
     
     # output the probabilities...which are used for the generated unichr
     # slot.
+
     return birth, death, change
 
+def output_action(u, birth, death, change):
+    if birth+death+change <= 0.9999 and birth+death+change >= 1.00001:
+        raise Exception("birth, death, change does not appear to be a probability")
+    if u <= birth:
+        return 'birth'
+    if u <= birth + death:
+        return 'death'
+    else:
+        return 'change'
 
 class BaseModel(BaseEstimator, TransformerMixin):
     """
@@ -128,30 +144,6 @@ class BMARS(object):
         bmars['basis'] = self.basis[:]
         bmars['params'] = self.params[:]
         return bmars
-    
-    def all_moves(self):
-        # determines all possible moves
-        # in strict MARS, you can only select basis once, and can't be nested
-        """
-        selected basis will be a dictionary in the form:
-        
-        *  basis index: list of lists...[[1], [0], [0, 1]] etc...
-        *  sign: list (-1, +1)
-        *  knots: list (float)
-        
-        return list of basis which have not yet been chosen...
-        """
-        # get all possible moves...
-        # if X is pandas...
-        s = self.X.columns
-        # s = list(range(X.shape[1]))
-        max_size = self.interaction+1
-        all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
-        
-        # now based on this go ahead and...do stuff!
-        basis_set = self._get_basis_set()
-        valid_basis = [x for x in all_combin if x not in basis_set]
-        return valid_basis
     
     def construct_pipeline(self, colnames=True):
         model_matrix = [('base model', BaseModel())]
@@ -225,8 +217,35 @@ class BMARS(object):
             raise Exception("Cannot find basis {} in current model".format(' '.join(basis)))
         self._remove_basis(basis)  
     
+    def perform_action(self, mode='birth'):
+        """
+        mode is one of 'birth', 'death', 'change'
+        
+        if selected will return the basis of interest. 
+        """
+        basis_set = self._get_basis_set()        
+                
+        if mode == 'birth':
+            try:
+                s = self.X.columns
+            except:
+                s = list(range(self.X.shape[1]))
+            # s = list(range(X.shape[1]))
+            max_size = self.interaction+1
+            all_combin = list(chain.from_iterable(set(list(combinations(s, r))) for r in range(1, max_size)))
+            
+            # now based on this go ahead and...do stuff!
+            basis_set = self._get_basis_set()
+            valid_basis = [x for x in all_combin if x not in basis_set]
+            return random.choice(valid_basis)
+        elif mode in ['death', 'change']:
+            return random.choice(basis_set)
+        else:
+            raise Exception("mode: {} not valid in perform_action".format(mode))
+
+
 # last step is to calculate the acceptance criteria..
-def bmars_sample_basis(X, basis, params, mode='dict'):
+def bmars_sample_basis(X, basis, params=None, mode='dict'):
     """
     -  X is training data
     -  basis is the columns to be selected for the basis
@@ -244,14 +263,16 @@ def bmars_sample_basis(X, basis, params, mode='dict'):
     This function can be used for adding or changing a selected basis
     as switches are assumed to be uniform and independent. 
     """
-    X_subset = np.array(X[basis])
+    if isinstance(X, pd.DataFrame):
+        X_subset = np.array(X[basis])
+    else:
+        X_subset = X[:, basis]
     
     # redrawing signs is easy...it is random choice of -1, 1
     import random
-    signs = params['signs'][:]
-    signs = [random.choice([-1, 1]) for _ in signs]    
+    signs = [random.choice([-1, 1]) for _ in basis]
     
-    knots = np.apply_along_axis(np.random.choice, 0, X_subset)    
+    knots = np.apply_along_axis(np.random.choice, 0, X_subset)
     
     # create new param set
     new_param = {}
@@ -277,6 +298,23 @@ def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='
     alpha = min(1.0, accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode) * accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode) * (X, y, l, interaction, current_BMARS, proposed_BMARS, mode))
     return alpha
 
+
+def gaussian_likelihood(y, y_hat):
+    """
+    assume gaussian iid noise
+    """
+    y = y.astype(float)
+    y_hat = y_hat.astype(float)
+    if np.array_equal(y, y_hat):
+        return float("-inf")
+    l2 = (y-y_hat)**2    
+    sigma2 = np.mean(l2)
+    n = len(y)
+    
+    constant = 1.0/(2*np.pi*sigma2)
+    
+    return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
+
 # bayes factor
 def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     """
@@ -292,21 +330,6 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     if mode == 'change':
         return 1.0
     """
-    def gaussian_likelihood(y, y_hat):
-        """
-        assume gaussian iid noise
-        """
-        y = y.astype(float)
-        y_hat = y_hat.astype(float)
-        if np.array_equal(y, y_hat):
-            return float("-inf")
-        l2 = (y-y_hat)**2    
-        sigma2 = np.mean(l2)
-        n = len(y)
-        
-        constant = 1.0/(2*np.pi*sigma2)
-        
-        return (constant ** (n/2) )* np.exp(-constant*np.sum(l2))
     # we will calculate the likelihood based on the pipeline...
     # for gaussian it is straight forward...
     # create model...
