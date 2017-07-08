@@ -114,9 +114,12 @@ class Hinge(BaseEstimator, TransformerMixin):
     always return 1d vector
     """
     def __init__(self, indices, knots, signs):
-        self.indices = np.array(indices)
-        self.knots = np.array(knots)
-        self.signs = np.array(signs)
+        #self.indices = np.array(indices)
+        #self.knots = np.array(knots)
+        #self.signs = np.array(signs)
+        self.indices = indices
+        self.knots   = knots  
+        self.signs   = signs  
     
     def fit(self, X, y=None):
         return self
@@ -153,7 +156,7 @@ class BMARS(object):
         col_names = []
         for basis, params in zip(self.basis, self.params):
             model_name = "B_{}".format("".join(str(x) for x in list(basis)))
-            model_obj  = Hinge(basis, params['knots'], params['signs'])
+            model_obj  = Hinge(np.array(basis), np.array(params['knots']), np.array(params['signs']))
             col_names.append(model_name)
             model_matrix.append((model_name, model_obj))
         if colnames:
