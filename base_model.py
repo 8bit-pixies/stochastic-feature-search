@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from scipy.stats import poisson, gamma
+
 from itertools import chain
 
 from sklearn.pipeline import Pipeline
@@ -53,7 +55,7 @@ def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11, show_lambd
     
     `b_k`, `d_k`, `p_k` respectively
     """
-    from scipy.stats import poisson, gamma
+    
     if l is None:
         # generate a sample l from Gamma
         l = gamma.rvs(gamma_loc+k, gamma_scale,size=1)[0]
@@ -301,7 +303,12 @@ def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='
     interaction is max level of interaction
     ... the rest follows.     
     """
-    alpha = min(1.0, accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode) * accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode) * (X, y, l, interaction, current_BMARS, proposed_BMARS, mode))
+    
+    bayes_ratio = accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode)
+    prior_ratio = accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
+    proposal_ratio = accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
+    
+    alpha = min(1.0, bayes_ratio * prior_ratio * proposal_ratio)
     return alpha
 
 
@@ -405,7 +412,8 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
             proposed_model = BMARS(**model)
             params = add_param(new_basis, basis_knot)
             proposed_model.add_basis(**params)
-            y_hat_propose = proposed_model.predict(X)
+            proposed_model_fitted = create_model(proposed_model.construct_pipeline(False)).fit(X, y)
+            y_hat_propose = proposed_model_fitted.predict(X)
             propose_likelihoods.append(gaussian_likelihood(y, y_hat_propose))
         propose_likelihood = np.mean(propose_likelihoods)
         bayes_factor = current_likelihood/propose_likelihood
@@ -449,15 +457,23 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     (1.0/(2*n))**(sum(range(interaction+1))-1)
     """
     poisson_obj = poisson(l)
-    #p_k = poisson_obj.pmf(k)  
+    #p_k = poisson_obj.pmf(k)          
+    try:
+        s = X.columns
+    except:
+        s = list(range(X.shape[1]))
     max_size = interaction+1
-    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))    
+    all_combin = list(chain.from_iterable(set(list(combinations(s, r))) for r in range(1, max_size)))    
+    basis_set = current_BMARS._get_basis_set()
+    valid_basis = [x for x in all_combin if x not in basis_set]
+    N = len(valid_basis)
     n = X.shape[0]
     
     current_param  = current_BMARS.export()
     proposed_param = proposed_BMARS.export()
     current_basis = current_param['basis']
     propose_basis = proposed_param['basis']
+    k = len(current_basis)
     if mode == 'birth':
         # get the basis for the proposed birth..
         new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
