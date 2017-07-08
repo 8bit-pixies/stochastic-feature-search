@@ -18,7 +18,7 @@ import itertools
 from itertools import combinations
 
 def create_model(additional_feats=[]):
-    pipeline = additional_feats
+    pipeline = additional_feats[:]
     pipeline.append(('SGD_regressor', SGDRegressor(loss='squared_loss', penalty='elasticnet')))
     model = Pipeline(pipeline[:])
     return model
@@ -179,7 +179,7 @@ class BMARS(object):
     
     def _remove_basis(self, basis):
         basis_set = self._get_basis_set()
-        idx_pop = [idx for idx, set_b in basis_set if set(basis) == set_b][0]
+        idx_pop = [idx for idx, set_b in enumerate(basis_set) if set(basis) == set_b][0]
         self.basis.pop(idx_pop)
         self.params.pop(idx_pop)
     
@@ -346,19 +346,20 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     # but we will leave this alone for now.
     if mode == 'change':
         current_model = create_model(current_BMARS.construct_pipeline(False))
-        current_model.fit(X)
+        current_model.fit(X, y)
         
         proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
-        proposed_model.fit(X)
+        proposed_model.fit(X, y)
         
         y_hat_current = current_model.predict(X)
         y_hat_proposed = proposed_model.predict(X)
         bayes_factor = gaussian_likelihood(y, y_hat_proposed)/gaussian_likelihood(y, y_hat_current)    
     elif mode == 'birth':
+        model = proposed_BMARS.export()
         current_basis = current_BMARS.export()['basis']
         propose_basis = proposed_BMARS.export()['basis']
         current_model = create_model(current_BMARS.construct_pipeline(False))
-        current_model.fit(X)
+        current_model.fit(X, y)
         
         # find the new basis...
         new_basis = [x for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
