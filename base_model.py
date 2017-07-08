@@ -113,21 +113,24 @@ class Hinge(BaseEstimator, TransformerMixin):
     
     always return 1d vector
     """
-    def __init__(self, x, t, s):
-        self.indices = list(x)
-        self.knots = t
-        self.signs = s
+    def __init__(self, indices, knots, signs):
+        self.indices = np.array(indices)
+        self.knots = np.array(knots)
+        self.signs = np.array(signs)
     
     def fit(self, X, y=None):
         return self
     
     def transform(self, X):
-        X_subset = np.array(X[[self.indices]])        
+        if isinstance(X, pd.DataFrame):
+            X_subset = np.array(X[self.indices])
+        else:
+            X_subset = X[:, self.indices]
         for idx, knot in enumerate(self.knots):
             X_subset[:, idx] = np.maximum(X_subset[:, idx]-knot, 0) * self.signs[idx]
         
         # if multiple collapse by interaction        
-        return np.prod(X_subset, axis=1)
+        return np.prod(X_subset, axis=1).reshape(-1, 1)
 
 class BMARS(object):
     def __init__(self, X, interaction=2, basis=[], params=[]):
@@ -276,8 +279,8 @@ def bmars_sample_basis(X, basis, params=None, mode='dict'):
     
     # create new param set
     new_param = {}
-    new_param['signs'] = signs
-    new_param['knots'] = knots
+    new_param['sign'] = signs
+    new_param['knot'] = knots
     new_param['basis'] = basis
     
     if mode == 'dict':
