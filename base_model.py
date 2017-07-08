@@ -505,18 +505,32 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
     k = len(current_param['basis'])
     b_k, d_k, p_k = output_prob_state(k, l)
     
-    max_size = interaction+1
-    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))    
+    max_size = interaction+1    
     n = X.shape[0]
     
     if mode == 'birth':
         # propose death / propose birth
+        try:
+            s = X.columns
+        except:
+            s = list(range(X.shape[1]))
+        # s = list(range(X.shape[1]))
+        max_size = current_BMARS.interaction+1
+        all_combin = list(chain.from_iterable(set(list(combinations(s, r))) for r in range(1, max_size)))
+        
+        # now based on this go ahead and...do stuff!
+        basis_set = current_BMARS._get_basis_set()
+        valid_basis = [x for x in all_combin if x not in basis_set]
+        N = len(valid_basis)        
+        
         new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
         J_k1 = len(new_basis)
         b_k1, d_k1, p_k1 = output_prob_state(k+1, l)
-        return (d_k1/k)/(b_k/(N*((2*n)**J_k1)))
+        d_proposal = 1 if k == 0 else (d_k1/k)
+        b_proposal = (b_k/(N*((2*n)**J_k1)))
+        return d_proposal / b_proposal
     if mode == 'death':
-        rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
+        return 1/accept_proposal_ratio(X, y, l, interaction, proposed_BMARS, current_BMARS, mode='birth')
         
     raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_proposal_ratio.")
         
