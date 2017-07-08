@@ -430,6 +430,10 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     """
     l is lambda which is needed for p(k)
     
+    we get a double scalar error - which might indicate that
+    we exceed float/long precision with either very large or very small values
+    This is probably due to N**(???)
+    
     """
     if mode == 'change':
         return 1.0
@@ -484,7 +488,7 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     elif mode == 'death':
         rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
         prior_num_basis_ratio = poisson_obj.pmf(k-1)/poisson_obj.pmf(k)
-        prior_type_basis_ratio = N/(k-1)
+        prior_type_basis_ratio = N if k <= 2 else N/(k-1)
         prior_params_ratio = (1.0/(2*n))**(-len(rm_basis))
     else:
         raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_prior_ratio.")
