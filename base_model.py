@@ -18,7 +18,7 @@ import itertools
 from itertools import combinations
 
 def create_model(additional_feats=[]):
-    pipeline = additional_feats[:]
+    pipeline = additional_feats
     pipeline.append(('SGD_regressor', SGDRegressor(loss='squared_loss', penalty='elasticnet')))
     model = Pipeline(pipeline[:])
     return model
@@ -160,9 +160,9 @@ class BMARS(object):
             col_names.append(model_name)
             model_matrix.append((model_name, model_obj))
         if colnames:
-            return FeatureUnion(model_matrix), col_names[:]
+            return [('union', FeatureUnion(model_matrix))], col_names[:]
         else:
-            return FeatureUnion(model_matrix)
+            return [('union', FeatureUnion(model_matrix))]
     
     def _get_basis_set(self):
         return [set(x) for x in self.basis]
@@ -357,6 +357,7 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     elif mode == 'birth':
         current_basis = current_BMARS.export()['basis']
         propose_basis = proposed_BMARS.export()['basis']
+        current_model = create_model(current_BMARS.construct_pipeline(False))
         current_model.fit(X)
         
         # find the new basis...
