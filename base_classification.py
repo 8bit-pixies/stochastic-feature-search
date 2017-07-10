@@ -30,11 +30,14 @@ def create_model(additional_feats=[]):
 def eval_pipeline(additional_feats, X, y, verbose=True):
     #print(additional_feats)    
     pipeline = additional_feats[:]
-    pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
+    #pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
+    pipeline.append(('SVC', SVC()))
     model = Pipeline(pipeline[:])
 
     # split data into 10 folds
-    kfold = KFold(n_splits=3, shuffle=True)
+    # disable shuffling, if shuffling is desired
+    # the input should be shuffled before going into KFold
+    kfold = KFold(n_splits=10, shuffle=False, random_state=42)
     results = cross_val_score(model, X, y, cv=kfold)
     if verbose:
         print("Result: {}".format(results.mean()))
@@ -148,14 +151,24 @@ class Hinge(BaseEstimator, TransformerMixin):
 class BMARS(object):
     def __init__(self, X, interaction=2, basis=[], params=[]):
         # add other params later...
+        # keep in mind, we don't really need the whole "X" input
+        # we only need the columns
+        # i will leave it as X simply for ease of use.
         self.X = X # X is your base matrix, i.e. when Basis = 1
         self.interaction = interaction
         self.basis = basis # this is a list of list, as order matters
         self.params = params # list of dicts with params by index
     
     def export(self):
+        # we will shrink the size of X
+        # so that we can compress the BMARS object
+        X_compress = self.X.copy()
+        if isinstance(X_compress, pd.DataFrame):
+            X_compress = X_compress.head(1)
+        else:
+            X_compress = X_compress[:1, :]
         bmars = {}
-        bmars['X'] = self.X.copy()
+        bmars['X'] = X_compress
         bmars['interaction'] = self.interaction
         bmars['basis'] = self.basis[:]
         bmars['params'] = self.params[:]
