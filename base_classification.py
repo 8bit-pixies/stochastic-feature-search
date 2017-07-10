@@ -40,6 +40,12 @@ def eval_pipeline(additional_feats, X, y, verbose=True):
         print("Result: {}".format(results.mean()))
     return results.mean()
 
+def output_poisson_lambda(k=1, l=None, gamma_loc=10, gamma_scale=11):
+    if l is None:
+        # generate a sample l from Gamma
+        l = gamma.rvs(gamma_loc+k, gamma_scale,size=1)[0]
+    return l        
+
 # 
 def output_prob_state(k, l=None, c=0.4, gamma_loc=10, gamma_scale=11, show_lambda=False):
     """
@@ -311,10 +317,12 @@ def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='
     proposal_ratio = accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
     
     alpha = min(1.0, bayes_ratio * prior_ratio * proposal_ratio)
-    print("bayes_ratio: {}".format(bayes_ratio))
-    print("prior_ratio: {}".format(prior_ratio))
-    print("proposal_ratio: {}".format(proposal_ratio))
-    return alpha
+    #print("bayes_ratio: {}".format(bayes_ratio))
+    #print("prior_ratio: {}".format(prior_ratio))
+    #print("proposal_ratio: {}".format(proposal_ratio))
+    return alpha, {'bayes_ratio': bayes_ratio,
+                   'prior_ratio': prior_ratio, 
+                   'proposal_ratio': proposal_ratio}
 
 # bayes factor
 def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
@@ -549,6 +557,31 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
         
     raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_proposal_ratio.")
 
+def mh_iter(X, interaction, current_model, debug=True):
+    current_basis = current_model.export()['basis']
+    k = len(current_basis)+1
+    l = output_poisson_lambda(k)
+    bk, dk, ck = output_prob_state(k, l)
 
+    action = output_action(np.random.uniform(), bk, dk, ck)
+    basis = current_model.perform_action(action)
+    output = bmars_sample_basis(X, list(basis), {'signs':[-1, 1]})
+    proposed_model = BMARS(**current_model.export())
+    proposed_model.add_basis(**output)
+
+    alpha, accept_info = acceptance_proba(X, y, l, interaction, 
+                     current_model, 
+                     proposed_model, mode=action)
+
+    if debug:
+        print("Action: {}".format(action))
+        print("basis: {}".format(list(basis)))
+        print("output: {}".format(output))
+        print("alpha: {}".format(alpha))
+        print("bayes_ratio: {}".format(accept_info['bayes_ratio']))
+        print("prior_ratio: {}".format(accept_info['prior_ratio']))
+        print("proposal_ratio: {}".format(accept_info['proposal_ratio']))
+    #
+    return np.random.uniform() < alpha
 
 
