@@ -23,7 +23,8 @@ from itertools import combinations
 
 def create_model(additional_feats=[]):
     pipeline = additional_feats[:]
-    pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
+    #pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
+    pipeline.append(('SVC', SVC()))
     model = Pipeline(pipeline[:])
     return model
 
