@@ -311,6 +311,9 @@ def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='
     proposal_ratio = accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
     
     alpha = min(1.0, bayes_ratio * prior_ratio * proposal_ratio)
+    print("bayes_ratio: {}".format(bayes_ratio))
+    print("prior_ratio: {}".format(prior_ratio))
+    print("proposal_ratio: {}".format(proposal_ratio))
     return alpha
 
 # bayes factor
@@ -465,11 +468,11 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     k = len(current_basis)
     if mode == 'birth':
         # get the basis for the proposed birth..
-        new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
-        prior_num_basis_ratio = poisson_obj.pmf(k+1)/poisson_obj.pmf(k)
-        prior_type_basis_ratio = k/N
-        prior_params_ratio = (1.0/(2*n))**(len(new_basis))
-        
+        #new_basis = [set(x) for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
+        #prior_num_basis_ratio = poisson_obj.pmf(k+1)/poisson_obj.pmf(k)
+        #prior_type_basis_ratio = k/N
+        #prior_params_ratio = (1.0/(2*n))**(len(new_basis))
+        return 1/accept_prior_ratio(X, y, l, interaction, proposed_BMARS, current_BMARS, mode='death')    
     elif mode == 'death':
         rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
         prior_num_basis_ratio = poisson_obj.pmf(k-1)/poisson_obj.pmf(k)
@@ -543,7 +546,7 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
         return 1/accept_proposal_ratio(X, y, l, interaction, proposed_BMARS, current_BMARS, mode='birth')
         
     raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_proposal_ratio.")
-        
-    
-    
-    
+
+
+
+
