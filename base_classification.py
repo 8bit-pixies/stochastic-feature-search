@@ -509,8 +509,11 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
     current_basis = current_param['basis']
     propose_basis = proposed_param['basis']
     
-    k = len(current_param['basis'])
-    b_k, d_k, p_k = output_prob_state(k, l)
+    k = len(proposed_param['basis'])
+    b_k, d_k, p_k = output_prob_state(k+1, l)
+    #print(l)
+    #print(k)
+    #print(b_k, d_k, p_k)
     
     max_size = interaction+1    
     n = X.shape[0]
