@@ -357,10 +357,12 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
         current_model.fit(X, y)
         
         # find the new basis...
-        new_basis = [x for x in propose_basis if set(x) not in [set(y) for y in current_basis]][0]
+        new_basis = [x for x in propose_basis if set(x) not in [set(x1) for x1 in current_basis]][0]
         
         # we know the likelihood for the current one? so only need to iterate over the new basis...
         y_hat_current = current_model.predict(X)
+        #print(y)
+        #print(y_hat_current)
         current_likelihood = accuracy_score(y, y_hat_current)   
         
         # need to perform some MC for proposed likelihood.
