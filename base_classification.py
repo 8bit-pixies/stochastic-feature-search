@@ -32,8 +32,8 @@ def create_model(additional_feats=[]):
 def eval_pipeline(additional_feats, X, y, verbose=True):
     #print(additional_feats)    
     pipeline = additional_feats[:]
-    #pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
-    pipeline.append(('SVC', SVC()))
+    pipeline.append(('SGD_SVM', SGDClassifier(loss='log', penalty='elasticnet')))
+    #pipeline.append(('SVC', SVC()))
     model = Pipeline(pipeline[:])
 
     # split data into 10 folds
@@ -561,7 +561,10 @@ def mh_iter(X, y, current_model, debug=True):
     basis = current_model.perform_action(action)
     output = bmars_sample_basis(X, list(basis), {'signs':[-1, 1]})
     proposed_model = BMARS(**current_model.export())
-    proposed_model.add_basis(**output)
+    if action in ['change', 'birth']:
+        proposed_model.add_basis(**output)
+    else:
+        proposed_model.remove_basis(**output)
 
     alpha, accept_info = acceptance_proba(X, y, l, 
                      current_model, 
@@ -569,7 +572,7 @@ def mh_iter(X, y, current_model, debug=True):
 
     if debug:
         print("action: {}".format(action))
-        print("output: {}".format(output))        
+        print("output: {}".format(output))
         print("acceptance_proba: {}".format(alpha))
         print("\tbayes_factor: {}".format(accept_info['bayes_factor']))
         print("\tprior_ratio: {}".format(accept_info['prior_ratio']))
