@@ -7,6 +7,7 @@ from itertools import chain
 
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDRegressor, SGDClassifier
+from sklearn.svm import SVC
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline, FeatureUnion
@@ -317,7 +318,7 @@ def bmars_sample_basis(X, basis, params=None, mode='dict'):
     else:
         raise Exception("Invalid choice of output, mode should be one of 'dict' or 'list'.")
 
-def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+def acceptance_proba(X, y, l, current_BMARS, proposed_BMARS, mode='change'):
     """
     X is our data
     y is out labels
@@ -327,8 +328,8 @@ def acceptance_proba(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='
     """
     
     bayes_factor = accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode)
-    prior_ratio = accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
-    proposal_ratio = accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode)
+    prior_ratio = accept_prior_ratio(X, y, l, current_BMARS, proposed_BMARS, mode)
+    proposal_ratio = accept_proposal_ratio(X, y, l, current_BMARS, proposed_BMARS, mode)
     
     alpha = min(1.0, bayes_factor * prior_ratio * proposal_ratio)
     #print("bayes_factor: {}".format(bayes_factor))
@@ -438,7 +439,7 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
         
     return bayes_factor
 
-def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+def accept_prior_ratio(X, y, l, current_BMARS, proposed_BMARS, mode='change'):
     """
     l is lambda which is needed for p(k)
     
@@ -450,35 +451,13 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     if mode == 'change':
         return 1.0
     
-    #p(k) * (k!/N^k) * 
-    # use soemthing liek this: all_combin = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
-    # all knot positions and sign can be simulated....
-    
-    """p_k
-    
-    poisson_obj = poisson(l)
-    p_k = poisson_obj.pmf(k)
-    """
-    
-    """prior-basis-function
-    max_size = interaction+1
-    N = chain.from_iterable(set(list(combinations(s, r))) for r in range(max_size))
-    
-    return np.math.factorial(k)/(N**k)    
-    """
-    
-    """prior for all knot and signs...
-    interaction = interaction
-    n = X.shape[0]
-    (1.0/(2*n))**(sum(range(interaction+1))-1)
-    """
     poisson_obj = poisson(l)
     #p_k = poisson_obj.pmf(k)          
     try:
         s = X.columns
     except:
         s = list(range(X.shape[1]))
-    max_size = interaction+1
+    max_size = current_BMARS.interaction+1
     all_combin = list(chain.from_iterable(set(list(combinations(s, r))) for r in range(1, max_size)))    
     basis_set = current_BMARS._get_basis_set()
     valid_basis = [x for x in all_combin if x not in basis_set]
@@ -496,7 +475,7 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
         #prior_num_basis_ratio = poisson_obj.pmf(k+1)/poisson_obj.pmf(k)
         #prior_type_basis_ratio = k/N
         #prior_params_ratio = (1.0/(2*n))**(len(new_basis))
-        return 1/accept_prior_ratio(X, y, l, interaction, proposed_BMARS, current_BMARS, mode='death')    
+        return 1/accept_prior_ratio(X, y, l, proposed_BMARS, current_BMARS, mode='death')    
     elif mode == 'death':
         rm_basis = [set(x) for x in current_basis if set(x) not in [set(y) for y in propose_basis]][0]
         prior_num_basis_ratio = poisson_obj.pmf(k-1)/poisson_obj.pmf(k)
@@ -507,7 +486,7 @@ def accept_prior_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode
     
     return prior_num_basis_ratio * prior_type_basis_ratio * prior_params_ratio
 
-def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, mode='change'):
+def accept_proposal_ratio(X, y, l, current_BMARS, proposed_BMARS, mode='change'):
     """
     l is lambda which is needed for p(k)
     
@@ -542,7 +521,7 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
     #print(k)
     #print(b_k, d_k, p_k)
     
-    max_size = interaction+1    
+    max_size = current_BMARS.interaction+1
     n = X.shape[0]
     
     if mode == 'birth':
@@ -567,11 +546,12 @@ def accept_proposal_ratio(X, y, l, interaction, current_BMARS, proposed_BMARS, m
         b_proposal = (b_k/(N*((2*n)**J_k1)))
         return d_proposal / b_proposal
     if mode == 'death':
-        return 1/accept_proposal_ratio(X, y, l, interaction, proposed_BMARS, current_BMARS, mode='birth')
+        return 1/accept_proposal_ratio(X, y, l, proposed_BMARS, current_BMARS, mode='birth')
         
     raise Exception("mode: {} not one of 'birth', 'death', 'change' in accept_proposal_ratio.")
 
-def mh_iter(X, y, interaction, current_model, debug=True):
+def mh_iter(X, y, current_model, debug=True):
+    #interaction = current_model.interaction
     current_basis = current_model.export()['basis']
     k = len(current_basis)+1
     l = output_poisson_lambda(k)
@@ -583,7 +563,7 @@ def mh_iter(X, y, interaction, current_model, debug=True):
     proposed_model = BMARS(**current_model.export())
     proposed_model.add_basis(**output)
 
-    alpha, accept_info = acceptance_proba(X, y, l, interaction, 
+    alpha, accept_info = acceptance_proba(X, y, l, 
                      current_model, 
                      proposed_model, mode=action)
 
