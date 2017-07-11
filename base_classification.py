@@ -433,7 +433,7 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     elif mode == 'death':
         return accept_bayes_factor(X, y, proposed_BMARS, current_BMARS, mode='birth')
     else:
-        # do exhaustive search - or use percnetiles for histogram information for faster 
+        # do exhaustive search - or use percentiles for histogram information for faster 
         # eval in MC sense.
         raise Exception("Invalid mode: {} chosen. Please choose mode in 'birth', 'death', 'change' in accept_bayes_factor".format(mode))
         
@@ -558,6 +558,7 @@ def mh_iter(X, y, current_model, debug=True):
     bk, dk, ck = output_prob_state(k, l)
 
     action = output_action(np.random.uniform(), bk, dk, ck)
+    print("action: {}".format(action))
     basis = current_model.perform_action(action)
     output = bmars_sample_basis(X, list(basis), {'signs':[-1, 1]})
     proposed_model = BMARS(**current_model.export())
@@ -569,7 +570,7 @@ def mh_iter(X, y, current_model, debug=True):
     alpha, accept_info = acceptance_proba(X, y, l, 
                      current_model, 
                      proposed_model, mode=action)
-
+    
     if debug:
         print("action: {}".format(action))
         print("output: {}".format(output))
