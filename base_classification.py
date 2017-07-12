@@ -13,6 +13,10 @@ from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.metrics import make_scorer
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import SelectFromModel
+from sklearn.linear_model import LassoCV
+
 
 # for sampling
 import random # use random.choice? and random.sample for interactions
@@ -23,17 +27,23 @@ import itertools
 from itertools import combinations
 
 def create_model(additional_feats=[]):
+    
+    # feature selection model
+    clf = LassoCV()
+    sfm = SelectFromModel(clf, threshold=0.25)
+    
     pipeline = additional_feats[:]
     #pipeline.append(('SGD_SVM', SGDClassifier(penalty='elasticnet')))
-    pipeline.append(('SVC', SVC()))
+    pipeline.append(('lasso feature select', SelectFromModel(LassoCV())))
+    pipeline.append(('SGD_GLM', SGDClassifier()))
     model = Pipeline(pipeline[:])
     return model
 
 def eval_pipeline(additional_feats, X, y, verbose=True):
     #print(additional_feats)    
     pipeline = additional_feats[:]
-    pipeline.append(('SGD_SVM', SGDClassifier(loss='log', penalty='elasticnet')))
-    #pipeline.append(('SVC', SVC()))
+    pipeline.append(('lasso feature select', SelectFromModel(LassoCV())))
+    pipeline.append(('SGD_GLM', SGDClassifier()))
     model = Pipeline(pipeline[:])
 
     # split data into 10 folds
@@ -363,30 +373,31 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
     # if mode is change - we will probably want to use a point estimate. of the two models
     # but we will leave this alone for now.
     if mode == 'change':
-        current_model = create_model(current_BMARS.construct_pipeline(False))
-        current_model.fit(X, y)
-        
-        proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
-        proposed_model.fit(X, y)
-        
-        y_hat_current = current_model.predict(X)
-        y_hat_proposed = proposed_model.predict(X)
-        bayes_factor = accuracy_score(y, y_hat_proposed)/accuracy_score(y, y_hat_current)    
+        #current_model = create_model(current_BMARS.construct_pipeline(False))
+        #current_model.fit(X, y)
+        #
+        #proposed_model = create_model(proposed_BMARS.construct_pipeline(False))
+        #proposed_model.fit(X, y)
+        #
+        #y_hat_current = current_model.predict(X)
+        #y_hat_proposed = proposed_model.predict(X)
+        #bayes_factor = accuracy_score(y, y_hat_proposed)/accuracy_score(y, y_hat_current)    
+        bayes_factor = eval_pipeline(proposed_BMARS.construct_pipeline(False), X, y, False)/eval_pipeline(current_BMARS.construct_pipeline(False), X, y, False)
     elif mode == 'birth':
         model = proposed_BMARS.export()
         current_basis = current_BMARS.export()['basis']
         propose_basis = proposed_BMARS.export()['basis']
-        current_model = create_model(current_BMARS.construct_pipeline(False))
-        current_model.fit(X, y)
+        #current_model = create_model(current_BMARS.construct_pipeline(False))
+        #current_model.fit(X, y)
         
         # find the new basis...
         new_basis = [x for x in propose_basis if set(x) not in [set(x1) for x1 in current_basis]][0]
         
         # we know the likelihood for the current one? so only need to iterate over the new basis...
-        y_hat_current = current_model.predict(X)
+        #y_hat_current = current_model.predict(X)
         #print(y)
         #print(y_hat_current)
-        current_likelihood = accuracy_score(y, y_hat_current)   
+        current_likelihood = eval_pipeline(current_BMARS.construct_pipeline(False), X, y, False) # accuracy_score(y, y_hat_current)   
         
         # need to perform some MC for proposed likelihood.
         # generate all combinations...
@@ -425,9 +436,10 @@ def accept_bayes_factor(X, y, current_BMARS, proposed_BMARS, mode='change'):
             proposed_model = BMARS(**model)
             params = add_param(new_basis, basis_knot)
             proposed_model.add_basis(**params)
-            proposed_model_fitted = create_model(proposed_model.construct_pipeline(False)).fit(X, y)
-            y_hat_propose = proposed_model_fitted.predict(X)
-            propose_likelihoods.append(accuracy_score(y, y_hat_propose))
+            #proposed_model_fitted = create_model(proposed_model.construct_pipeline(False)).fit(X, y)
+            #y_hat_propose = proposed_model_fitted.predict(X)
+            #propose_likelihoods.append(accuracy_score(y, y_hat_propose))
+            propose_likelihoods.append(eval_pipeline(proposed_model.construct_pipeline(False), X, y, False))
         propose_likelihood = np.mean(propose_likelihoods)
         bayes_factor = current_likelihood/propose_likelihood
     elif mode == 'death':
