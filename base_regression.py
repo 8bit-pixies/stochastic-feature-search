@@ -569,7 +569,7 @@ def mh_iter(X, y, current_model, debug=True):
     bk, dk, ck = output_prob_state(k, l)
 
     action = output_action(np.random.uniform(), bk, dk, ck)
-    print("action: {}".format(action))
+    #print("action: {}".format(action))
     basis = current_model.perform_action(action)
     output = bmars_sample_basis(X, list(basis), {'signs':[-1, 1]})
     proposed_model = BMARS(**current_model.export())
